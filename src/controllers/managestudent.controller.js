@@ -370,7 +370,7 @@ export const getAllCourses = async(req,res) => {
             studentName: student.name,
             studentNumber: student.studentNumber,
             year: student.class?.year?.name || null,
-            course:{
+            courses:{
                 id: course.id,
                 code: course.code,
                 name: course.name,
