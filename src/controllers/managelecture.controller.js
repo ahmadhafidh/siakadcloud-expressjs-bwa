@@ -97,171 +97,180 @@ export const logout = (req,res) => {
 }
 
 // getLectureStats
-export const getLectureStats = async(req,res) => {
-    const tokenCredential = req.user;
-    const { id } = tokenCredential;
+// Lecture stats
+export const getLectureStats = async (req, res) => {
+  const tokenCredential = req.user;
+  const { id } = tokenCredential;
+  console.log("Token credential data:", tokenCredential);
 
-    try {
-        // Validasi role
-        if (tokenCredential.role !== "lecture") {
-            return res.status(403).json({
-            success: false,
-            message: "Only lecture can access this data",
-            });
-        }
-
-        //jalankan semua query secara paralel
-        const [
-            lecture,
-            totalStudents,
-            totalCredits,
-            totalSchedules,
-            uniqueClassess,
-            schedules,
-            studyPlans
-        ] = await Promise.all([
-            // 1. data Lecture
-            prisma.lecture.findUnique({
-                where:{id},
-                select:{
-                    id:true,
-                    name: true,
-                    email: true
-                }
-            }),
-
-            // 2. Total student yang dipegang dosen
-            prisma.student.count({
-                where:{
-                    class:{
-                        schedule:{
-                            some:{
-                                course:{
-                                    lectureId: id
-                                }
-                            }
-                        }
-                    }
-                }
-            }),
-
-            // 3. Total SKS dari semua course milik lecture
-            prisma.course.aggregate({
-                where: { lectureId: id },
-                _sum: { credits: true }
-            }),
-
-            // 4. Total schedule join course milik lecture
-            prisma.schedule.count({
-                where:{
-                    course:{
-                        lectureId:id
-                    }
-                }
-            }),
-
-            // 5. Class unik dari schedule
-            prisma.schedule.findMany({
-                where: {
-                  course: {
-                    lectureId: id
-                  }
-                },
-                select: { classId: true }
-            }),
-
-            // 6. Ambil semua schedules
-            prisma.schedule.findMany({
-                where: {
-                  course: {
-                    lectureId: id
-                  }
-                },
-                select: {
-                  id: true,
-                  day: true,
-                  timeStart: true,
-                  timeEnd: true,
-                  class: {
-                    select: {
-                      id: true,
-                      name: true,
-                    }
-                  },
-                  course: {
-                    select: {
-                      id: true,
-                      name: true,
-                      code: true,
-                      credits: true,
-                    }
-                  }
-                }
-            }),
-
-            // 7. Ambil studyplan untuk lecture ini
-            prisma.studyPlanCourse.findMany({
-                where: {
-                  course: {
-                    lectureId: id
-                  }
-                },
-                select: {
-                  studyPlan: {
-                    select: {
-                      status: true,
-                      student: {
-                        select: {
-                          name: true
-                        }
-                      }
-                    }
-                  },
-                  course: {
-                    select: {
-                      name: true
-                    }
-                  }
-                }
-            })
-        ])
-
-        const upcomingTimeline = await prisma.timeLine.findMany({
-            where:{
-                date: {
-                    gte: new Date() // hanya yang tanggal >= sekarang
-                }
-            },
-            orderBy: { date: "asc" } // urutkan dari yang paling dekat
-        })
-
-        const totalClasses = new Set(uniqueClassess.map(c=> c.classId))
-
-        // format studyplans supaya lebih rapi
-        const formattedStudyPlans = studyPlans.map(spc => ({
-            courseName: spc.course.name,
-            studentName: spc.studyPlan.student.name,
-            status: spc.studyPlan.status,
-        }))
-
-        return successResponse(
-            res, 
-            "Get dashboard lecture successful",
-            {
-                ...lecture,
-                totalStudents,
-                totalClasses,
-                totalSks: totalCredits._sum.credits ?? 0,
-                totalSchedules,
-                schedules,
-                studyPlans: formattedStudyPlans,
-                upcomingTimeline
-            }
-        )
-    } catch (error) {
-        return errorResponse(res,"Failed to get lecture stats", error.message)
+  try {
+    // Validasi role
+    if (tokenCredential.role !== "lecture") {
+      return res.status(403).json({
+        success: false,
+        message: "Only lecture can access this data",
+      });
     }
-}
+
+    // Jalankan semua query secara paralel
+    const [
+      lecture,
+      totalStudents,
+      totalCredits,
+      totalSchedules,
+      uniqueClasses,
+      schedules,
+      studyPlans
+    ] = await Promise.all([
+      // 1. Data lecture
+      prisma.lecture.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        }
+      }),
+
+      // 2. Total student yang dipegang dosen
+      prisma.student.count({
+        where: {
+          class: {
+            schedule: {
+              some: {
+                course: {
+                  lectureId: id
+                }
+              }
+            }
+          }
+        }
+      }),
+
+
+      // 3. Total SKS dari semua course milik lecture
+      prisma.course.aggregate({
+        where: { lectureId: id },
+        _sum: { credits: true }
+      }),
+
+      // 4. Total schedule join course milik lecture
+      prisma.schedule.count({
+        where: {
+          course: {
+            lectureId: id
+          }
+        }
+      }),
+
+      // 5. Class unik dari schedule
+      prisma.schedule.findMany({
+        where: {
+          course: {
+            lectureId: id
+          }
+        },
+        select: { classId: true }
+      }),
+
+      // 6. Ambil semua schedules
+      prisma.schedule.findMany({
+        where: {
+          course: {
+            lectureId: id
+          }
+        },
+        select: {
+          id: true,
+          day: true,
+          timeStart: true,
+          timeEnd: true,
+          class: {
+            select: {
+              id: true,
+              name: true,
+            }
+          },
+          course: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+              credits: true,
+            }
+          }
+        }
+      }),
+
+      // 7. Ambil studyplan untuk lecture ini
+      prisma.studyPlanCourse.findMany({
+        where: {
+          course: {
+            lectureId: id
+          }
+        },
+        select: {
+          studyPlan: {
+            select: {
+              status: true,
+              student: {
+                select: {
+                  name: true
+                }
+              }
+            }
+          },
+          course: {
+            select: {
+              name: true
+            }
+          }
+        }
+      })
+    ]);
+
+    // Ambil timeline yang akan datang
+    const upcomingTimeline = await prisma.timeLine.findMany({
+      where: {
+        date: {
+          gte: new Date() // hanya yang tanggal >= sekarang
+        }
+      },
+      orderBy: { date: "asc" } // urutkan dari yang paling dekat
+    });
+
+    const totalClasses = new Set(uniqueClasses.map(c => c.classId)).size;
+
+    // Format studyplans supaya lebih rapi (flatten)
+    const formattedStudyPlans = studyPlans.map(spc => ({
+      courseName: spc.course.name,
+      studentName: spc.studyPlan.student.name,
+      status: spc.studyPlan.status,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      message: "Get lecture stats successful",
+      data: {
+        ...lecture,
+        totalStudents,
+        totalClasses,
+        totalSks: totalCredits._sum.credits ?? 0,
+        totalSchedules,
+        schedules,
+        studyPlans: formattedStudyPlans,
+        upcomingTimeline
+      }
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get lecture stats",
+      error: error.message
+    });
+  }
+};
 
 // Get courses by lecture ID
 export const getCoursesByLectureId = async(req,res) => {
@@ -579,14 +588,16 @@ export const getStudyPlanCoursesByLectureId = async(req,res) => {
 
         const mergedData = []
         studyPlanCourses.forEach(spc => {
-            let existingPlan = mergedData.find(item => item.studyplan.id === spc.studyPlan.id)
+            let existingPlan = mergedData.find(
+                item => item.studyPlan?.id === spc.studyPlan?.id
+            )
 
             const courseData = {
-                id: spc.course.id,
-                name: spc.course.name,
-                code: spc.course.code,
-                credits: spc.course.credits,
-                lectureName: spc.course.lecture?.name || null // ambil nama lecture
+                id: spc.course?.id || null,
+                name: spc.course?.name || null,
+                code: spc.course?.code || null,
+                credits: spc.course?.credits || null,
+                lectureName: spc.course?.lecture?.name || null
             }
 
             if(existingPlan){
@@ -598,16 +609,16 @@ export const getStudyPlanCoursesByLectureId = async(req,res) => {
                     createdAt: spc.createdAt,
                     updatedAt: spc.updatedAt,
                     studyPlan: {
-                        id: spc.studyPlan.id,
-                        status: spc.studyPlan.status,
-                        gpa: spc.studyPlan.gpa,
-                        createdAt: spc.studyPlan.createdAt,
-                        updatedAt: spc.studyPlan.updatedAt,
-                        studentId: spc.studyPlan.student.id,
-                        name: spc.studyPlan.student.name,
-                        studentNumber: spc.studyPlan.student.studentNumber,
-                        yearId: spc.studyPlan.student.class.year.id,
-                        yearName: spc.studyPlan.student.class.year.name,
+                        id: spc.studyPlan?.id || null,
+                        status: spc.studyPlan?.status || null,
+                        gpa: spc.studyPlan?.gpa || null,
+                        createdAt: spc.studyPlan?.createdAt || null,
+                        updatedAt: spc.studyPlan?.updatedAt || null,
+                        studentId: spc.studyPlan?.student?.id || null,
+                        name: spc.studyPlan?.student?.name || null,
+                        studentNumber: spc.studyPlan?.student?.studentNumber || null,
+                        yearId: spc.studyPlan?.student?.class?.year?.id || null,
+                        yearName: spc.studyPlan?.student?.class?.year?.name || null,
                     },
                     courses: [courseData]
                 })
